@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="./ace/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+  <script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+  <script>
+  
+    $(function() {
+  
+    // create first editor
+     var editor = ace.edit("editor");
+     editor.setTheme("ace/theme/xcode");
+     editor.session.setMode("ace/mode/python");
+
+
+      var recv = 0;
+       
+      function refresh(recv) {
+       
+        $('#msg').append( recv  + '</br>');
+      }
+
+      var conn = new SockJS('http://localhost:8081/weio');
+
+      conn.onopen = function() {
+         // alert('OTVORIO BA');
+         console.log('otvorio');
+      };
+
+      conn.onmessage = function(e) {
+          console.log('Received: ' + e.data);
+          editor.setValue(e.data);
+          //refresh(e.data);
+      }
+
+      conn.onclose = function() {
+        //alert('ZATVORIO BA');
+        console.log('zatvorio');
+      };
+      
+      var play = new SockJS('http://localhost:8081/play');
+      
+      play.onopen = function() {
+           console.log('otvorio play');
+           //
+        };
+      play.onmessage = function(e) {
+           console.log('Received: ' + e.data);
+           refresh(e.data);
+        }
+          
+      play.onclose = function() {
+        //alert('ZATVORIO BA');
+        console.log('zatvorio');         
+         };
+        
+      $("#large-button").click( function(){
+         play.send(getCodeFromEditor());
+         $('#msg').empty();
+        }
+        );
+             
+        
+      function getCodeFromEditor() {
+        qstr = editor.getValue();
+        //return encodeURIComponent(qstr);
+        return qstr;
+       };
+      
+    });
+</script>
+
+<title>Editor</title>
+  <style type="text/css" media="screen">
+
+    .ace_editor {
+        position: relative !important;
+        border: 1px solid lightgray;
+        margin: auto;
+        height: 500px;
+        width: 100%;
+    }
+
+    .scrollmargin {
+        height: 40px;
+        text-align: left;
+    }
+
+    .large-button {
+        color: lightgray;
+        cursor: pointer;
+        font: 18px arial;
+        padding: 4px;
+        text-align: left;
+        border: medium solid transparent;
+        display: inline-block;
+		border: thin solid lightgray;
+        border-radius: 4px 4px 4px 4px;
+		
+    }
+    .large-button:hover {
+        box-shadow: 0 0 12px 0 lightgray;
+    }
+  </style>
+  
+  
+
+</head>
+<body>
+    <div class="scrollmargin">
+        <span id="large-button" class="large-button">
+        Run
+        </span>
+    </div>
+
+    <pre id="editor">print("hello")
+    </pre>
+
+    <div id="result"></div>
+
+    
+    <script>
+    // 
+    // // create first editor
+    // var editor = ace.edit("editor");
+    // editor.setTheme("ace/theme/xcode");
+    // editor.session.setMode("ace/mode/python");
+    // 
+    // // AJAX CONNECTION
+    // 
+    // function xmlhttpPost(strURL) {
+    // 
+    //     var xmlHttpReq = false;
+    //     var self = this;
+    //     // Mozilla/Safari
+    //     if (window.XMLHttpRequest) {
+    //         self.xmlHttpReq = new XMLHttpRequest();
+    //     }
+    //     // IE
+    //     else if (window.ActiveXObject) {
+    //         self.xmlHttpReq = new ActiveXObject("Microsoft.XMLHTTP");
+    //     }
+    //     self.xmlHttpReq.open('POST', strURL, true);
+    //     self.xmlHttpReq.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    //     self.xmlHttpReq.onreadystatechange = function() {
+    //         if (self.xmlHttpReq.readyState == 4) {
+    //             updatepage(self.xmlHttpReq.responseText);
+    //         }
+    //     }
+    //     self.xmlHttpReq.send(getCodeFromEditor());
+    // }
+    // function getCodeFromEditor() {
+    //  qstr =  editor.getValue();
+    //  return "script_file=" + encodeURIComponent(qstr);
+    // }
+    // 
+    // function updatepage(str){
+    //     document.getElementById("result").innerHTML = str;
+    // }
+
+    </script>
+    
+
+<h3>Weio talks :</h3>
+<div id="msg"></div>
+</body>
+</html>
