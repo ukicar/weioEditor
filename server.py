@@ -2,7 +2,12 @@
 import math
 import subprocess
 import os, signal
-from tornado import web, ioloop
+import socket
+import pickle
+import functools
+import errno
+import os
+from tornado import web, ioloop, iostream
 
 from sockjs.tornado import SockJSRouter, SockJSConnection
 
@@ -27,18 +32,52 @@ class PlayHandler(SockJSConnection):
             #            os.killpg(p.pid, signal.SIGTERM)
         
         #open weio_main.py file and write code inside
-        f = open('weio_main.py', 'wb')
+        
+        processName = 'weio_main'
+        
+        f = open(processName +'.py', 'wb')
         f.write(msg)
         f.close()
         
         #launch process
         
-        self.pipe = p = subprocess.Popen(['python', '-u', 'weio_main.py'],
-        stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        self.pipe = p = subprocess.Popen(['python', '-u', processName + '.py'],
+        stdout=subprocess.PIPE)
         ioloop.IOLoop.instance().add_callback(self.on_subprocess_result)
+        
+        # UNIX DOMAIN SOCKET
+        # Here we are launching Unix Socket Domain Socket Server, so we can communicate
+        # with our process in two ways
+        
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
+        # 0 means non blocking socket
+        sock.setblocking(0)
+        # this has to be uds_nameOfProcess
+        server_address = 'uds_' + processName
+
+        # Make sure the socket does not already exist
+        try:
+            os.unlink(server_address)
+        except OSError:
+            if os.path.exists(server_address):
+                raise
+                
+
+        sock.bind(server_address)
+        # how many connections I can accept
+        sock.listen(10)
+        
+        # add to io loop
+        io_loop = ioloop.IOLoop.instance()
+        callback = functools.partial(uds_socket_connection_ready, sock)
+        io_loop.add_handler(sock.fileno(), callback, io_loop.READ)
+
 
     def on_subprocess_result(self):
       line = self.pipe.stdout.readline()
+      
       if line :
           print line
           self.send(line)
@@ -62,6 +101,36 @@ class PlayHandler(SockJSConnection):
         if line :
             self.send(line)
 
+# UNIX DOMAIN SOCKET CALLBACK
+def uds_socket_connection_ready(sock, fd, events):
+    while True:
+        try:
+            connection, address = sock.accept()
+            print "client connected to UNIX domain socket"
+        except socket.error, e:
+            if e[0] not in (errno.EWOULDBLOCK, errno.EAGAIN):
+                raise
+            return
+        connection.setblocking(0)
+        global stream
+        stream = iostream.IOStream(connection)
+        #stream.write("HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\nPong!\r\n", stream.close)
+        #stream.read_until("\n", on_receive)
+        stream.read_until_close(on_close_socket, streaming_callback=on_receive)
+        # Strange thing, if I don't send something thru socket before closing
+        # Tornado will cut off last chunk of data :|
+            
+def on_receive(data):
+    # Grabs data from socket and unpickle it
+    recv = pickle.loads(data)
+    print "from socket :", recv
+    
+def on_close_socket(data):
+    # closing socket, communication is over
+    # After that I'm listening for new connections
+    global stream
+    stream.close()
+    print "stream is closed"
 
 class WeioHandler(SockJSConnection):
 
